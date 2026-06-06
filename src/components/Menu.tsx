@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
 import { SectionHeading } from "@/components/Section";
-import { categories, menuItems, type MenuCategory } from "@/lib/data";
+import { categories, type MenuCategory } from "@/lib/data";
 import { cn, formatIDR } from "@/lib/utils";
 import { useCart } from "@/lib/cart";
+import { useMenu } from "@/lib/menuStore";
 
 type Filter = "Semua" | MenuCategory;
 const filters: Filter[] = ["Semua", ...categories];
@@ -10,13 +11,14 @@ const filters: Filter[] = ["Semua", ...categories];
 export function Menu() {
   const [active, setActive] = useState<Filter>("Semua");
   const { add } = useCart();
+  const { items: menuItems } = useMenu();
 
   const visible = useMemo(
     () =>
       active === "Semua"
         ? menuItems
         : menuItems.filter((item) => item.category === active),
-    [active],
+    [active, menuItems],
   );
 
   return (

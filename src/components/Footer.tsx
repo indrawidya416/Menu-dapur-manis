@@ -85,7 +85,12 @@ export function Footer() {
         </div>
 
         <div className="mt-14 flex flex-col items-center justify-between gap-4 border-t border-rindu-900/60 pt-7 text-xs text-rindu-100/55 sm:flex-row">
-          <p>© {new Date().getFullYear()} Dapur Harum Rindu. Seluruh hak cipta dilindungi.</p>
+          <p>
+            © {new Date().getFullYear()} Dapur Harum Rindu. Seluruh hak cipta dilindungi.{" "}
+            <a href="#admin" className="text-rindu-100/40 transition-colors hover:text-rindu-300">
+              Admin
+            </a>
+          </p>
           <p>
             Dibuat dengan <span className="text-chili-500">♥</span> untuk pecinta kuliner Nusantara.
           </p>
