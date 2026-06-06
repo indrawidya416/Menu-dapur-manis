@@ -11,7 +11,9 @@ export const isSupabaseConfigured = Boolean(url && anonKey);
  * situs tetap berjalan memakai data menu lokal (mode fallback).
  */
 export const supabase: SupabaseClient | null = isSupabaseConfigured
-  ? createClient(url!, anonKey!)
+  ? createClient(url!, anonKey!, {
+      db: { schema: "public" },
+    })
   : null;
 
 // Nama tabel & bucket terpusat
