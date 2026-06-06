@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from "react";
-import { useMenu, fileToDataUrl } from "@/lib/menuStore";
+import { useMenu } from "@/lib/menuStore";
+import {
+  signIn,
+  signOut,
+  getInitialSession,
+  onAuthChange,
+} from "@/lib/auth";
+import { isSupabaseConfigured } from "@/lib/supabase";
 import { categories, type MenuCategory, type MenuItem } from "@/lib/data";
 import { cn, formatIDR } from "@/lib/utils";
-
-// Kata sandi sederhana (sisi-klien). Ganti sesuai keinginan owner.
-const ADMIN_PASSWORD = "dapurharum2024";
-const AUTH_KEY = "dhr_admin_auth";
 
 const emptyItem: MenuItem = {
   name: "",
@@ -33,28 +36,50 @@ export function AdminPanel() {
 }
 
 function AdminApp() {
-  const [authed, setAuthed] = useState(
-    () => sessionStorage.getItem(AUTH_KEY) === "1",
-  );
+  const [authed, setAuthed] = useState(false);
+  const [ready, setReady] = useState(false);
 
-  if (!authed) {
-    return <LoginScreen onSuccess={() => setAuthed(true)} />;
+  useEffect(() => {
+    let mounted = true;
+    getInitialSession().then((ok) => {
+      if (mounted) {
+        setAuthed(ok);
+        setReady(true);
+      }
+    });
+    const unsub = onAuthChange((ok) => mounted && setAuthed(ok));
+    return () => {
+      mounted = false;
+      unsub();
+    };
+  }, []);
+
+  if (!ready) {
+    return (
+      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-coal-900 text-rindu-100/60">
+        Memuat…
+      </div>
+    );
   }
+
+  if (!authed) return <LoginScreen onSuccess={() => setAuthed(true)} />;
   return <Dashboard onLogout={() => setAuthed(false)} />;
 }
 
 function LoginScreen({ onSuccess }: { onSuccess: () => void }) {
+  const [email, setEmail] = useState("");
   const [pw, setPw] = useState("");
-  const [error, setError] = useState(false);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
 
-  function submit(e: React.FormEvent) {
+  async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (pw === ADMIN_PASSWORD) {
-      sessionStorage.setItem(AUTH_KEY, "1");
-      onSuccess();
-    } else {
-      setError(true);
-    }
+    setBusy(true);
+    setError("");
+    const res = await signIn(email, pw);
+    setBusy(false);
+    if (res.ok) onSuccess();
+    else setError(res.error || "Gagal masuk.");
   }
 
   return (
@@ -65,31 +90,57 @@ function LoginScreen({ onSuccess }: { onSuccess: () => void }) {
       >
         <h1 className="font-display text-2xl text-rindu-50">Panel Admin</h1>
         <p className="mt-1 text-sm text-rindu-100/60">Dapur Harum Rindu</p>
-        <label className="mt-6 block">
+
+        {isSupabaseConfigured && (
+          <label className="mt-6 block">
+            <span className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-rindu-100/60">
+              Email
+            </span>
+            <input
+              type="email"
+              autoFocus
+              value={email}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                setError("");
+              }}
+              placeholder="owner@email.com"
+              className={inputCls}
+            />
+          </label>
+        )}
+
+        <label className={cn("block", isSupabaseConfigured ? "mt-4" : "mt-6")}>
           <span className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-rindu-100/60">
             Kata Sandi
           </span>
           <input
             type="password"
-            autoFocus
+            autoFocus={!isSupabaseConfigured}
             value={pw}
             onChange={(e) => {
               setPw(e.target.value);
-              setError(false);
+              setError("");
             }}
             placeholder="••••••••"
             className={inputCls}
           />
         </label>
-        {error && (
-          <p className="mt-2 text-sm text-chili-500">Kata sandi salah.</p>
-        )}
-        <button type="submit" className={cn(btnPrimary, "mt-5 w-full")}>
-          Masuk
+
+        {error && <p className="mt-2 text-sm text-chili-500">{error}</p>}
+
+        <button type="submit" disabled={busy} className={cn(btnPrimary, "mt-5 w-full disabled:opacity-50")}>
+          {busy ? "Memproses…" : "Masuk"}
         </button>
+
+        <p className="mt-4 text-center text-[11px] text-rindu-100/40">
+          {isSupabaseConfigured
+            ? "Mode: Supabase (data tersimpan untuk semua pengunjung)"
+            : "Mode: Lokal (perubahan hanya di browser ini)"}
+        </p>
         <a
           href="#beranda"
-          className="mt-4 block text-center text-xs text-rindu-100/50 hover:text-rindu-300"
+          className="mt-2 block text-center text-xs text-rindu-100/50 hover:text-rindu-300"
         >
           ← Kembali ke situs
         </a>
@@ -99,32 +150,53 @@ function LoginScreen({ onSuccess }: { onSuccess: () => void }) {
 }
 
 function Dashboard({ onLogout }: { onLogout: () => void }) {
-  const { items, isCustomized, add, update, remove, move, reset, replaceAll } =
-    useMenu();
+  const {
+    items,
+    loading,
+    mode,
+    isCustomized,
+    add,
+    update,
+    remove,
+    move,
+    reset,
+    replaceAll,
+  } = useMenu();
   const [editing, setEditing] = useState<MenuItem | null>(null);
   const [creating, setCreating] = useState(false);
   const [toast, setToast] = useState("");
+  const [busy, setBusy] = useState(false);
   const importRef = useRef<HTMLInputElement>(null);
 
   function showToast(msg: string) {
     setToast(msg);
-    setTimeout(() => setToast(""), 2500);
+    setTimeout(() => setToast(""), 2800);
   }
 
-  function handleSave(item: MenuItem, originalName?: string) {
-    if (originalName) {
-      update(originalName, item);
-      showToast("Menu diperbarui ✓");
-    } else {
-      add(item);
-      showToast("Menu ditambahkan ✓");
+  async function run(fn: () => Promise<void>, okMsg: string) {
+    setBusy(true);
+    try {
+      await fn();
+      showToast(okMsg);
+    } catch (e) {
+      showToast("Gagal: " + ((e as Error).message || "terjadi kesalahan") + " ✗");
+    } finally {
+      setBusy(false);
     }
+  }
+
+  async function handleSave(item: MenuItem, originalName?: string) {
+    await run(
+      () => (originalName ? update(originalName, item) : add(item)),
+      originalName ? "Menu diperbarui ✓" : "Menu ditambahkan ✓",
+    );
     setEditing(null);
     setCreating(false);
   }
 
   function handleExport() {
-    const blob = new Blob([JSON.stringify(items, null, 2)], {
+    const clean = items.map(({ ...rest }) => rest);
+    const blob = new Blob([JSON.stringify(clean, null, 2)], {
       type: "application/json",
     });
     const url = URL.createObjectURL(blob);
@@ -143,12 +215,16 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
       const text = await file.text();
       const parsed = JSON.parse(text) as MenuItem[];
       if (!Array.isArray(parsed)) throw new Error("format salah");
-      replaceAll(parsed);
-      showToast("Menu diimpor ✓");
+      await run(() => replaceAll(parsed), "Menu diimpor ✓");
     } catch {
       showToast("Gagal impor: file tidak valid ✗");
     }
     e.target.value = "";
+  }
+
+  async function async_logout() {
+    await signOut();
+    onLogout();
   }
 
   return (
@@ -160,18 +236,18 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
             <h1 className="font-display text-xl text-rindu-50">Panel Admin Menu</h1>
             <p className="text-xs text-rindu-100/60">
               {items.length} item ·{" "}
-              {isCustomized ? (
-                <span className="text-rindu-300">data hasil edit</span>
-              ) : (
-                <span className="text-rindu-100/50">data bawaan</span>
-              )}
+              <span className={mode === "supabase" ? "text-leaf-500" : "text-rindu-300"}>
+                {mode === "supabase" ? "Supabase (publik)" : "Lokal (browser ini)"}
+              </span>
+              {isCustomized ? " · data hasil edit" : " · data bawaan"}
+              {loading && " · memuat…"}
             </p>
           </div>
           <div className="flex items-center gap-2">
             <a href="#beranda" className={btnGhost}>
               Lihat Situs
             </a>
-            <button onClick={onLogout} className={btnGhost}>
+            <button onClick={async_logout} className={btnGhost}>
               Keluar
             </button>
           </div>
@@ -181,13 +257,13 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
       <main className="mx-auto max-w-5xl px-5 py-6">
         {/* Aksi global */}
         <div className="flex flex-wrap items-center gap-2">
-          <button onClick={() => setCreating(true)} className={btnPrimary}>
+          <button onClick={() => setCreating(true)} disabled={busy} className={btnPrimary}>
             + Tambah Menu
           </button>
           <button onClick={handleExport} className={btnSecondary}>
             ⬇ Export JSON
           </button>
-          <button onClick={() => importRef.current?.click()} className={btnSecondary}>
+          <button onClick={() => importRef.current?.click()} disabled={busy} className={btnSecondary}>
             ⬆ Import JSON
           </button>
           <input
@@ -200,8 +276,9 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
           <button
             onClick={() => {
               if (confirm("Kembalikan menu ke data bawaan? Semua perubahan hilang."))
-                reset();
+                run(reset, "Direset ke bawaan ✓");
             }}
+            disabled={busy}
             className={cn(btnGhost, "ml-auto")}
           >
             Reset ke bawaan
@@ -210,11 +287,13 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
 
         {/* Petunjuk publikasi */}
         <div className="mt-4 rounded-xl border border-rindu-500/30 bg-rindu-500/5 p-4 text-sm text-rindu-100/80">
-          <p className="font-semibold text-rindu-200">Cara menyimpan permanen</p>
+          <p className="font-semibold text-rindu-200">
+            {mode === "supabase" ? "Tersimpan otomatis ✓" : "Cara menyimpan permanen"}
+          </p>
           <p className="mt-1 leading-relaxed">
-            Perubahan tersimpan otomatis di browser ini. Agar berlaku untuk{" "}
-            <strong>semua pengunjung</strong>: klik <em>Export JSON</em>, lalu
-            kirim file itu ke pengembang untuk di-commit & deploy ulang.
+            {mode === "supabase"
+              ? "Setiap perubahan langsung tersimpan ke database dan terlihat oleh semua pengunjung. Gambar diunggah ke Supabase Storage."
+              : "Perubahan tersimpan di browser ini saja. Klik Export JSON lalu kirim ke pengembang untuk dipublikasikan ke semua pengunjung."}
           </p>
         </div>
 
@@ -227,16 +306,16 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
             >
               <div className="flex shrink-0 flex-col gap-1">
                 <button
-                  onClick={() => move(item.name, -1)}
-                  disabled={i === 0}
+                  onClick={() => run(() => move(item.name, -1), "Urutan diubah ✓")}
+                  disabled={i === 0 || busy}
                   className="text-rindu-300 disabled:opacity-20"
                   aria-label="Naik"
                 >
                   ▲
                 </button>
                 <button
-                  onClick={() => move(item.name, 1)}
-                  disabled={i === items.length - 1}
+                  onClick={() => run(() => move(item.name, 1), "Urutan diubah ✓")}
+                  disabled={i === items.length - 1 || busy}
                   className="text-rindu-300 disabled:opacity-20"
                   aria-label="Turun"
                 >
@@ -269,16 +348,15 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
                 <p className="truncate text-xs text-rindu-100/50">{item.description}</p>
               </div>
               <div className="flex shrink-0 gap-2">
-                <button onClick={() => setEditing(item)} className={btnSecondary}>
+                <button onClick={() => setEditing(item)} disabled={busy} className={btnSecondary}>
                   Edit
                 </button>
                 <button
                   onClick={() => {
-                    if (confirm(`Hapus "${item.name}"?`)) {
-                      remove(item.name);
-                      showToast("Menu dihapus ✓");
-                    }
+                    if (confirm(`Hapus "${item.name}"?`))
+                      run(() => remove(item.name), "Menu dihapus ✓");
                   }}
+                  disabled={busy}
                   className={btnDanger}
                 >
                   Hapus
@@ -286,7 +364,7 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
               </div>
             </li>
           ))}
-          {items.length === 0 && (
+          {items.length === 0 && !loading && (
             <li className="rounded-xl border border-dashed border-rindu-900/60 p-8 text-center text-sm text-rindu-100/50">
               Belum ada menu. Klik "Tambah Menu".
             </li>
@@ -328,27 +406,33 @@ function ItemForm({
   onCancel: () => void;
   onSave: (item: MenuItem, originalName?: string) => void;
 }) {
+  const { uploadImage } = useMenu();
   const [form, setForm] = useState<MenuItem>({
     ...initial,
     tags: initial.tags ?? [],
   });
   const [tagsText, setTagsText] = useState((initial.tags ?? []).join(", "));
   const [uploading, setUploading] = useState(false);
+  const [uploadErr, setUploadErr] = useState("");
+  const [saving, setSaving] = useState(false);
   const originalName = initial.name;
 
   async function onPickImage(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploading(true);
+    setUploadErr("");
     try {
-      const dataUrl = await fileToDataUrl(file);
-      setForm((f) => ({ ...f, image: dataUrl }));
+      const url = await uploadImage(file);
+      setForm((f) => ({ ...f, image: url }));
+    } catch (err) {
+      setUploadErr("Upload gagal: " + ((err as Error).message || ""));
     } finally {
       setUploading(false);
     }
   }
 
-  function submit(e: React.FormEvent) {
+  async function submit(e: React.FormEvent) {
     e.preventDefault();
     const cleaned: MenuItem = {
       ...form,
@@ -361,7 +445,9 @@ function ItemForm({
         .filter(Boolean),
     };
     if (!cleaned.name) return;
-    onSave(cleaned, isEdit ? originalName : undefined);
+    setSaving(true);
+    await onSave(cleaned, isEdit ? originalName : undefined);
+    setSaving(false);
   }
 
   return (
@@ -393,7 +479,7 @@ function ItemForm({
           )}
           <div className="flex-1">
             <label className={cn(btnSecondary, "inline-block cursor-pointer")}>
-              {uploading ? "Memuat..." : "Pilih Gambar"}
+              {uploading ? "Mengunggah…" : "Pilih Gambar"}
               <input
                 type="file"
                 accept="image/*"
@@ -402,8 +488,9 @@ function ItemForm({
               />
             </label>
             <p className="mt-2 text-xs text-rindu-100/50">
-              JPG/PNG. Disarankan rasio persegi, &lt; 500 KB.
+              JPG/PNG. Disarankan rasio persegi, &lt; 1 MB.
             </p>
+            {uploadErr && <p className="mt-1 text-xs text-chili-500">{uploadErr}</p>}
             {form.image && (
               <button
                 type="button"
@@ -490,8 +577,12 @@ function ItemForm({
           <button type="button" onClick={onCancel} className={cn(btnGhost, "flex-1")}>
             Batal
           </button>
-          <button type="submit" className={cn(btnPrimary, "flex-1")}>
-            {isEdit ? "Simpan Perubahan" : "Tambah"}
+          <button
+            type="submit"
+            disabled={saving || uploading}
+            className={cn(btnPrimary, "flex-1 disabled:opacity-50")}
+          >
+            {saving ? "Menyimpan…" : isEdit ? "Simpan Perubahan" : "Tambah"}
           </button>
         </div>
       </form>
