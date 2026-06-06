@@ -1,0 +1,20 @@
+import { chromium } from "playwright-core";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const file = "file://" + path.join(__dirname, "dist", "index.html");
+const out = (n) => path.join(__dirname, "screenshots", n);
+const browser = await chromium.launch();
+const ctx = await browser.newContext({ viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 1 });
+const page = await ctx.newPage();
+await page.goto(file, { waitUntil: "networkidle" });
+await page.addStyleTag({ content: `.reveal{opacity:1 !important;animation:none !important;transform:none !important;}` });
+await page.waitForTimeout(500);
+const grab = async (id, name) => {
+  const r = await page.$eval(`#${id}`, el => ({ top: el.offsetTop, h: el.offsetHeight }));
+  await page.screenshot({ path: out(name), clip: { x:0, y:r.top, width:1440, height:r.h }, fullPage:true });
+};
+await grab("testimoni","section-testimoni.png");
+await grab("reservasi","section-reservasi.png");
+await browser.close();
+console.log("done");
