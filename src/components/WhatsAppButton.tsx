@@ -1,10 +1,10 @@
-import { contact } from "@/lib/data";
-
-const waLink = `https://wa.me/${contact.whatsapp}?text=${encodeURIComponent(
-  contact.whatsappMessage,
-)}`;
+import { useSettings } from "@/lib/settingsStore";
 
 export function WhatsAppButton() {
+  const { settings } = useSettings();
+  const waLink = `https://wa.me/${settings.whatsapp}?text=${encodeURIComponent(
+    settings.whatsappMessage,
+  )}`;
   return (
     <a
       href={waLink}

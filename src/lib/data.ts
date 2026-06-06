@@ -180,6 +180,38 @@ export const contact = {
   mapsQuery: "Kebayoran Baru, Jakarta Selatan",
 };
 
+// === Pengaturan situs (dapat diubah owner lewat Panel Admin) ===
+export interface SiteSettings {
+  brandName: string;
+  brandTagline: string;
+  logoUrl: string; // kosong = pakai logo SVG bawaan
+  whatsapp: string;
+  whatsappDisplay: string;
+  whatsappMessage: string;
+  address: string;
+  hours: string;
+  mapsQuery: string;
+  instagram: string;
+  facebook: string;
+  tiktok: string;
+}
+
+export const defaultSettings: SiteSettings = {
+  brandName: "Dapur Harum Rindu",
+  brandTagline: "Rasa Nusantara",
+  logoUrl: "",
+  whatsapp: contact.whatsapp,
+  whatsappDisplay: contact.whatsappDisplay,
+  whatsappMessage: contact.whatsappMessage,
+  address: contact.address,
+  hours: contact.hours,
+  mapsQuery: contact.mapsQuery,
+  instagram: "#",
+  facebook: "#",
+  tiktok: "#",
+};
+
+
 // === Informasi pembayaran (mudah diganti dengan data asli) ===
 import qris from "@/assets/qris.jpg";
 

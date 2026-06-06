@@ -11,14 +11,16 @@ import { CartDrawer } from "@/components/CartDrawer";
 import { AdminPanel } from "@/components/AdminPanel";
 import { CartProvider } from "@/lib/cart";
 import { MenuProvider } from "@/lib/menuStore";
+import { SettingsProvider } from "@/lib/settingsStore";
 import { useReveal } from "@/lib/useReveal";
 
 export default function App() {
   useReveal();
 
   return (
-    <MenuProvider>
-      <CartProvider>
+    <SettingsProvider>
+      <MenuProvider>
+        <CartProvider>
         <div className="min-h-screen bg-coal-900 text-rindu-50">
           <Navbar />
           <main>
@@ -34,7 +36,8 @@ export default function App() {
           <CartDrawer />
         </div>
         <AdminPanel />
-      </CartProvider>
-    </MenuProvider>
+        </CartProvider>
+      </MenuProvider>
+    </SettingsProvider>
   );
 }

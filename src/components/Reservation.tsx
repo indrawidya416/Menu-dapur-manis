@@ -1,34 +1,35 @@
 import { useState, type FormEvent } from "react";
 import { SectionHeading } from "@/components/Section";
-import { contact } from "@/lib/data";
-
-const info = [
-  {
-    label: "Alamat",
-    value: contact.address,
-    icon: <path d="M12 21s-7-5.2-7-11a7 7 0 1 1 14 0c0 5.8-7 11-7 11Zm0-8.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" />,
-  },
-  {
-    label: "Telepon / WhatsApp",
-    value: contact.whatsappDisplay,
-    icon: <path d="M5 4h4l2 5-3 2a12 12 0 0 0 5 5l2-3 5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2Z" />,
-  },
-  {
-    label: "Jam Buka",
-    value: contact.hours,
-    icon: <path d="M12 7v5l3 2m6-2a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />,
-  },
-];
-
-const mapsEmbed = `https://maps.google.com/maps?q=${encodeURIComponent(
-  contact.mapsQuery,
-)}&output=embed`;
-const mapsLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-  contact.mapsQuery,
-)}`;
+import { useSettings } from "@/lib/settingsStore";
 
 export function Reservation() {
   const [submitted, setSubmitted] = useState(false);
+  const { settings } = useSettings();
+
+  const info = [
+    {
+      label: "Alamat",
+      value: settings.address,
+      icon: <path d="M12 21s-7-5.2-7-11a7 7 0 1 1 14 0c0 5.8-7 11-7 11Zm0-8.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" />,
+    },
+    {
+      label: "Telepon / WhatsApp",
+      value: settings.whatsappDisplay,
+      icon: <path d="M5 4h4l2 5-3 2a12 12 0 0 0 5 5l2-3 5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2Z" />,
+    },
+    {
+      label: "Jam Buka",
+      value: settings.hours,
+      icon: <path d="M12 7v5l3 2m6-2a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />,
+    },
+  ];
+
+  const mapsEmbed = `https://maps.google.com/maps?q=${encodeURIComponent(
+    settings.mapsQuery,
+  )}&output=embed`;
+  const mapsLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+    settings.mapsQuery,
+  )}`;
 
   function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -49,7 +50,7 @@ export function Reservation() {
       `• Catatan: ${notes}\n\n` +
       `Terima kasih 🙏`;
 
-    const waUrl = `https://wa.me/${contact.whatsapp}?text=${encodeURIComponent(message)}`;
+    const waUrl = `https://wa.me/${settings.whatsapp}?text=${encodeURIComponent(message)}`;
     window.open(waUrl, "_blank", "noopener,noreferrer");
     setSubmitted(true);
   }
@@ -106,13 +107,19 @@ export function Reservation() {
             </a>
 
             <div className="reveal mt-8 flex gap-3">
-              {["Instagram", "Facebook", "TikTok"].map((social) => (
+              {[
+                { label: "Instagram", href: settings.instagram },
+                { label: "Facebook", href: settings.facebook },
+                { label: "TikTok", href: settings.tiktok },
+              ].map((social) => (
                 <a
-                  key={social}
-                  href="#"
+                  key={social.label}
+                  href={social.href || "#"}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="rounded-full border border-rindu-900/70 bg-coal-800/40 px-4 py-2 text-xs font-medium text-rindu-100/70 transition-colors hover:border-rindu-700 hover:text-rindu-50"
                 >
-                  {social}
+                  {social.label}
                 </a>
               ))}
             </div>

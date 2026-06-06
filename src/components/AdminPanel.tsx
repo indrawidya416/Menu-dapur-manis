@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useMenu } from "@/lib/menuStore";
+import { useSettings } from "@/lib/settingsStore";
+import { type SiteSettings } from "@/lib/data";
 import {
   signIn,
   signOut,
@@ -166,6 +168,7 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
   const [creating, setCreating] = useState(false);
   const [toast, setToast] = useState("");
   const [busy, setBusy] = useState(false);
+  const [tab, setTab] = useState<"menu" | "settings">("menu");
   const importRef = useRef<HTMLInputElement>(null);
 
   function showToast(msg: string) {
@@ -252,8 +255,31 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
             </button>
           </div>
         </div>
+        {/* Tab navigasi */}
+        <div className="mx-auto flex max-w-5xl gap-1 px-5">
+          {([
+            { id: "menu", label: "Kelola Menu" },
+            { id: "settings", label: "Pengaturan Situs" },
+          ] as const).map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={cn(
+                "border-b-2 px-4 py-2.5 text-sm font-medium transition-colors",
+                tab === t.id
+                  ? "border-rindu-400 text-rindu-50"
+                  : "border-transparent text-rindu-100/50 hover:text-rindu-100",
+              )}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
       </header>
 
+      {tab === "settings" ? (
+        <SettingsTab onToast={showToast} />
+      ) : (
       <main className="mx-auto max-w-5xl px-5 py-6">
         {/* Aksi global */}
         <div className="flex flex-wrap items-center gap-2">
@@ -371,9 +397,10 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
           )}
         </ul>
       </main>
+      )}
 
       {/* Modal form */}
-      {(creating || editing) && (
+      {tab === "menu" && (creating || editing) && (
         <ItemForm
           initial={editing ?? emptyItem}
           isEdit={!!editing}
@@ -587,6 +614,153 @@ function ItemForm({
         </div>
       </form>
     </div>
+  );
+}
+
+function SettingsTab({ onToast }: { onToast: (m: string) => void }) {
+  const { settings, save, uploadLogo } = useSettings();
+  const [form, setForm] = useState<SiteSettings>(settings);
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+
+  function set<K extends keyof SiteSettings>(key: K, val: SiteSettings[K]) {
+    setForm((f) => ({ ...f, [key]: val }));
+  }
+
+  async function onPickLogo(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const url = await uploadLogo(file);
+      set("logoUrl", url);
+      onToast("Logo terunggah ✓");
+    } catch (err) {
+      onToast("Upload gagal: " + ((err as Error).message || "") + " ✗");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      await save(form);
+      onToast("Pengaturan tersimpan ✓");
+    } catch (err) {
+      onToast("Gagal simpan: " + ((err as Error).message || "") + " ✗");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const mapsPreview = `https://maps.google.com/maps?q=${encodeURIComponent(
+    form.mapsQuery || "Jakarta",
+  )}&output=embed`;
+
+  return (
+    <main className="mx-auto max-w-3xl px-5 py-6">
+      {/* Brand & Logo */}
+      <section className="rounded-xl border border-rindu-900/50 bg-coal-800/40 p-5">
+        <h3 className="font-display text-lg text-rindu-50">Logo & Nama Brand</h3>
+        <div className="mt-4 flex items-center gap-4">
+          <span className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full border border-rindu-400/50 bg-coal-900">
+            {form.logoUrl ? (
+              <img src={form.logoUrl} alt="logo" className="h-full w-full object-cover" />
+            ) : (
+              <span className="text-[10px] text-rindu-100/40">SVG bawaan</span>
+            )}
+          </span>
+          <div>
+            <label className={cn(btnSecondary, "inline-block cursor-pointer")}>
+              {uploading ? "Mengunggah…" : "Pilih Logo"}
+              <input type="file" accept="image/*" onChange={onPickLogo} className="hidden" />
+            </label>
+            {form.logoUrl && (
+              <button
+                type="button"
+                onClick={() => set("logoUrl", "")}
+                className="ml-2 text-xs text-chili-500 hover:underline"
+              >
+                Hapus logo
+              </button>
+            )}
+            <p className="mt-1 text-xs text-rindu-100/50">PNG/JPG, rasio persegi.</p>
+          </div>
+        </div>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <Field label="Nama Brand">
+            <input value={form.brandName} onChange={(e) => set("brandName", e.target.value)} className={inputCls} />
+          </Field>
+          <Field label="Tagline">
+            <input value={form.brandTagline} onChange={(e) => set("brandTagline", e.target.value)} className={inputCls} />
+          </Field>
+        </div>
+      </section>
+
+      {/* Kontak */}
+      <section className="mt-5 rounded-xl border border-rindu-900/50 bg-coal-800/40 p-5">
+        <h3 className="font-display text-lg text-rindu-50">Kontak & WhatsApp</h3>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <Field label="Nomor WhatsApp (cth: 6281234567890)">
+            <input value={form.whatsapp} onChange={(e) => set("whatsapp", e.target.value)} placeholder="6281234567890" className={inputCls} />
+          </Field>
+          <Field label="WhatsApp (tampilan)">
+            <input value={form.whatsappDisplay} onChange={(e) => set("whatsappDisplay", e.target.value)} placeholder="+62 812-3456-7890" className={inputCls} />
+          </Field>
+          <Field label="Jam Buka">
+            <input value={form.hours} onChange={(e) => set("hours", e.target.value)} className={inputCls} />
+          </Field>
+          <Field label="Pesan WhatsApp default">
+            <input value={form.whatsappMessage} onChange={(e) => set("whatsappMessage", e.target.value)} className={inputCls} />
+          </Field>
+        </div>
+        <div className="mt-4">
+          <Field label="Alamat Lengkap">
+            <textarea value={form.address} onChange={(e) => set("address", e.target.value)} rows={2} className={inputCls} />
+          </Field>
+        </div>
+      </section>
+
+      {/* Peta */}
+      <section className="mt-5 rounded-xl border border-rindu-900/50 bg-coal-800/40 p-5">
+        <h3 className="font-display text-lg text-rindu-50">Lokasi Peta (Google Maps)</h3>
+        <Field label="Alamat / koordinat untuk peta">
+          <input value={form.mapsQuery} onChange={(e) => set("mapsQuery", e.target.value)} placeholder="cth: -6.244, 106.800 atau nama tempat" className={inputCls} />
+        </Field>
+        <p className="mt-1 text-xs text-rindu-100/50">
+          Tip: salin alamat dari Google Maps, atau koordinat (lat, long) agar pin tepat.
+        </p>
+        <div className="mt-3 overflow-hidden rounded-lg border border-rindu-900/60">
+          <iframe title="pratinjau peta" src={mapsPreview} className="h-48 w-full" loading="lazy" />
+        </div>
+      </section>
+
+      {/* Sosial Media */}
+      <section className="mt-5 rounded-xl border border-rindu-900/50 bg-coal-800/40 p-5">
+        <h3 className="font-display text-lg text-rindu-50">Media Sosial</h3>
+        <div className="mt-4 grid gap-4 sm:grid-cols-3">
+          <Field label="Instagram (URL)">
+            <input value={form.instagram} onChange={(e) => set("instagram", e.target.value)} placeholder="https://instagram.com/..." className={inputCls} />
+          </Field>
+          <Field label="Facebook (URL)">
+            <input value={form.facebook} onChange={(e) => set("facebook", e.target.value)} placeholder="https://facebook.com/..." className={inputCls} />
+          </Field>
+          <Field label="TikTok (URL)">
+            <input value={form.tiktok} onChange={(e) => set("tiktok", e.target.value)} placeholder="https://tiktok.com/@..." className={inputCls} />
+          </Field>
+        </div>
+      </section>
+
+      <div className="sticky bottom-0 mt-6 flex justify-end gap-3 border-t border-rindu-900/60 bg-coal-900/95 py-4 backdrop-blur">
+        <button onClick={() => setForm(settings)} className={btnGhost}>
+          Batalkan perubahan
+        </button>
+        <button onClick={handleSave} disabled={saving || uploading} className={cn(btnPrimary, "disabled:opacity-50")}>
+          {saving ? "Menyimpan…" : "Simpan Pengaturan"}
+        </button>
+      </div>
+    </main>
   );
 }
 
